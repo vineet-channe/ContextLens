@@ -17,7 +17,7 @@ const MAX_HISTORY = 50 // higher cap since history is persisted
 
 export default function ReaderPage() {
   const [pdfFile, setPdfFile] = useState(null)
-  const [provider, setProvider] = useState('claude')
+  const [provider, setProvider] = useState('openrouter')
   const [openRouterModel, setOpenRouterModel] = useState(DEFAULT_OPENROUTER_MODEL)
   const [history, setHistory] = useState([])
   const [historyViewKey, setHistoryViewKey] = useState(null)
@@ -124,7 +124,7 @@ export default function ReaderPage() {
       pageNumber: pendingPageNumberRef.current,
       surrounding: pendingContextRef.current?.surrounding ?? '',
       documentTitle: pendingContextRef.current?.documentTitle ?? '',
-      provider: pendingContextRef.current?.provider ?? 'claude',
+      provider: pendingContextRef.current?.provider ?? 'openrouter',
       model: pendingContextRef.current?.model,
       followUps: [],
     }

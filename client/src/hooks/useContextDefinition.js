@@ -76,7 +76,7 @@ export function useContextDefinition() {
   }, [])
 
   const fetchDefinition = useCallback(
-    ({ highlighted, surrounding, documentTitle, pageNumber, provider = 'claude', model, apiKey, anchor }) => {
+    ({ highlighted, surrounding, documentTitle, pageNumber, provider = 'openrouter', model, apiKey, anchor }) => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current)
       // Store params for follow-up reuse
       lastCallRef.current = { highlighted, surrounding, documentTitle, pageNumber, provider, model, apiKey }

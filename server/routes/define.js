@@ -52,7 +52,7 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: validationError })
   }
 
-  const { highlighted, surrounding, documentTitle, pageNumber, provider = 'claude', model, followUp, previousExplanation, apiKey } = req.body
+  const { highlighted, surrounding, documentTitle, pageNumber, provider = 'openrouter', model, followUp, previousExplanation, apiKey } = req.body
   const trimmedKey = typeof apiKey === 'string' ? apiKey.trim() : undefined
   const payload = { highlighted, surrounding, documentTitle, pageNumber, model, followUp, previousExplanation, apiKey: trimmedKey || undefined }
 
