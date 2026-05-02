@@ -111,7 +111,7 @@ To add a new provider: create `server/providers/<name>.js` and register it in `i
 
 ## Browser Support
 
-ContextLens is tested and supported on **desktop Chrome and Edge only**.
+ContextLens is tested and supported on the following:
 
 | Browser | Support |
 |---|---|
