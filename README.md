@@ -109,6 +109,21 @@ To add a new provider: create `server/providers/<name>.js` and register it in `i
 
 ---
 
+## Browser Support
+
+ContextLens is tested and supported on **desktop Chrome and Edge only**.
+
+| Browser | Support |
+|---|---|
+| Chrome | ✅ Fully supported |
+| Edge | ✅ Fully supported |
+| Firefox | ✅ Fully supported |
+| Mobile browsers | ❌ Not supported for now |
+
+Safari may work partially, but is not tested and may have issues with PDF text selection and history navigation.
+
+---
+
 ## Tech Stack
 
 ### Frontend
