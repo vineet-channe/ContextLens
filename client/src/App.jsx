@@ -1,6 +1,7 @@
 import { TransitionProvider, useTransition } from './context/TransitionContext'
 import { AuthProvider } from './context/AuthContext'
 import PageTransition from './components/shared/PageTransition'
+import { Analytics } from '@vercel/analytics/react'
 import LandingPage from './pages/LandingPage'
 import ReaderPage from './pages/ReaderPage'
 
@@ -21,6 +22,7 @@ export default function App() {
       <TransitionProvider>
         <AppContent />
       </TransitionProvider>
+      <Analytics />
     </AuthProvider>
   )
 }
