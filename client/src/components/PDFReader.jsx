@@ -45,6 +45,7 @@ export default function PDFReader({ file, provider, model }) {
 
     const highlighted = selection.toString().trim()
     if (highlighted.length < 2) return
+    if (highlighted.length > 500) return
 
     // Get surrounding text (~200 chars on each side) from the range
     const range = selection.getRangeAt(0)

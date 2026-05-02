@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
@@ -13,7 +14,15 @@ export default function PDFViewer({ file, onTextSelect, scrollToPageRef }) {
   const [containerWidth, setContainerWidth] = useState(760)
   const [zoom, setZoom] = useState(100)
   const [historyHighlight, setHistoryHighlight] = useState(null)
+  const [toastVisible, setToastVisible] = useState(false)
+  const toastTimer = useRef(null)
   const containerRef = useRef(null)
+
+  const showToast = useCallback(() => {
+    setToastVisible(true)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToastVisible(false), 3000)
+  }, [])
 
   // Expose scroll-to-page to parent via ref
   if (scrollToPageRef) {
@@ -54,6 +63,7 @@ export default function PDFViewer({ file, onTextSelect, scrollToPageRef }) {
 
     const highlighted = selection.toString().trim()
     if (highlighted.length < 2) return
+    if (highlighted.length > 500) { showToast(); return }
 
     const range = selection.getRangeAt(0)
     const container = range.commonAncestorContainer
@@ -111,7 +121,7 @@ export default function PDFViewer({ file, onTextSelect, scrollToPageRef }) {
         viewportHeight: window.innerHeight,
       },
     })
-  }, [onTextSelect])
+  }, [onTextSelect, showToast])
 
   const pageWidth = Math.max(200, Math.floor(containerWidth * (zoom / 100)))
 
@@ -122,8 +132,44 @@ export default function PDFViewer({ file, onTextSelect, scrollToPageRef }) {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        position: 'relative',
       }}
     >
+      <AnimatePresence>
+        {toastVisible && (
+          <motion.div
+            key="selection-toast"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              position: 'fixed',
+              bottom: '32px',
+              left: '50%',
+              translateX: '-50%',
+              transform: 'translateX(-50%)',
+              zIndex: 999,
+              background: '#1a1a1a',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '10px',
+              padding: '12px 22px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '13px',
+              color: '#f0f0f0',
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+            }}
+          >
+            <span style={{ color: '#e8a84c', fontSize: '15px' }}>⚠</span>
+            Selection too long — highlight 500 characters or fewer
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Zoom toolbar */}
       <div
         style={{

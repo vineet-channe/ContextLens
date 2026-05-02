@@ -269,9 +269,7 @@ export default function ReaderPage() {
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            borderRight: panelVisible
-              ? '1px solid var(--border-subtle)'
-              : 'none',
+            borderRight: '1px solid var(--border-subtle)',
           }}
         >
           {!pdfFile ? (
@@ -285,33 +283,27 @@ export default function ReaderPage() {
           )}
         </div>
 
-        {/* ── Right: Definition panel ── */}
-        <AnimatePresence>
-          {panelVisible && (
-            <motion.aside
-              key="panel"
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 320, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-              style={{
-                flexShrink: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                background: 'var(--bg-surface)',
-                overflow: 'hidden',
-              }}
-            >
-              <DefinitionPanel
-                state={panelState}
-                history={history}
-                onSelectHistory={handleHistorySelect}
-                onFollowUp={handlePanelFollowUp}
-                liveFollowUp={liveFollowUp}
-              />
-            </motion.aside>
-          )}
-        </AnimatePresence>
+        {/* ── Right: Definition panel (always reserved space) ── */}
+        <motion.aside
+          initial={false}
+          style={{
+            width: 320,
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'var(--bg-surface)',
+            overflow: 'hidden',
+            borderLeft: '1px solid var(--border-subtle)',
+          }}
+        >
+          <DefinitionPanel
+            state={panelState}
+            history={history}
+            onSelectHistory={handleHistorySelect}
+            onFollowUp={handlePanelFollowUp}
+            liveFollowUp={liveFollowUp}
+          />
+        </motion.aside>
       </div>
 
       {/* ── Floating definition popup ── */}

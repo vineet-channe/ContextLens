@@ -11,6 +11,7 @@ export function useTextSelection({ onSelect }) {
 
     const highlighted = selection.toString().trim()
     if (highlighted.length < 2) return
+    if (highlighted.length > 500) return
 
     const range = selection.getRangeAt(0)
     const container = range.commonAncestorContainer

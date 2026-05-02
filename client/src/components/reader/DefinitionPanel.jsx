@@ -55,11 +55,12 @@ function EmptyHint() {
       <p
         style={{
           fontFamily: 'var(--font-mono)',
-          fontSize: '12px',
-          color: 'var(--text-tertiary)',
-          lineHeight: 1.75,
-          maxWidth: '200px',
-          fontWeight: 300,
+          fontSize: '13px',
+          color: 'var(--text-secondary)',
+          lineHeight: 1.8,
+          maxWidth: '220px',
+          fontWeight: 400,
+          letterSpacing: '0.3px',
         }}
       >
         Highlight any word or phrase
