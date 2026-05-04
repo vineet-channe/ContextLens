@@ -172,46 +172,64 @@ Safari may work partially, but is not tested and may have issues with PDF text s
         │
         ▼
 4. useTextSelection hook fires
+   → walks DOM to the react-pdf page container for full page text
    → extracts: highlighted phrase
-   → extracts: ±300 chars surrounding context
-   → extracts: page number, document title
+   → extracts: sentence-bounded surrounding context (±600 chars)
+   → extracts: page number, document title, nearest section heading
         │
         ▼
-5. POST /api/define (SSE)
+5. Check definition cache (keyed by term + document + page)
+   → cache hit: render instantly, no API call
+   → cache miss: POST /api/define (SSE)
+        │
+        ▼
+6. POST /api/define (SSE)
    → backend selects provider (claude/gemini/openai/openrouter)
-   → builds context-aware prompt
+   → builds structured system prompt (document context + formatting rules)
+   → uses native multi-turn messages array for follow-ups
    → streams response back chunk by chunk
         │
         ▼
-6. DefinitionPopup renders streaming text in real time
+7. DefinitionPopup renders streaming text in real time
+   → shows full conversation thread (initial answer + all follow-up Q&A)
+   → follow-up input available directly in the popup
         │
         ▼
-7. User can ask a follow-up question
-   → same flow, previousExplanation appended to prompt
+8. User can ask unlimited follow-up questions
+   → full messages array sent each time (no lost context)
         │
         ▼
-8. If authenticated: lookup is saved to MongoDB automatically
+9. If authenticated: lookup is saved to MongoDB automatically
 ```
 
 ### The AI Prompt
 
-Every provider uses the same prompt template from `server/providers/prompt.js`:
+Every provider shares the same system prompt template from `server/providers/prompt.js`:
 
 ```
-You are helping a reader understand a complex document.
+You are a scholarly reading assistant helping readers understand complex documents.
 
 Document: "${documentTitle}"
-Page ${pageNumber} context: "${surrounding}"
+Page ${pageNumber}
+Section: "${sectionHeading}"   ← included when detected
+Surrounding text:
+"""
+${surrounding}
+"""
 
-The reader highlighted: "${highlighted}"
+Highlighted term: "${highlighted}"
 
-In 2–4 sentences, explain what "${highlighted}" means specifically
-within this document's context and subject matter. Do not give a
-generic dictionary definition. Ground your explanation in how the
-term is being used here.
+For the initial explanation, structure your response exactly as:
+**In this document:** 1–3 sentences explaining the term exactly as it is used here.
+**Why it matters here:** 1–2 sentences on the role this term plays in the author's argument.
+
+Do not give a generic dictionary definition. If the term is an abbreviation, expand it first.
+For follow-up questions, respond conversationally in 2–4 sentences, staying grounded in this document.
 ```
 
-This is why ContextLens explanations feel different from a dictionary — the model sees the surrounding 300 characters and the document title before generating its answer.
+This system prompt is sent as a `system` parameter (Claude) or `messages[0].role = 'system'` (OpenAI/OpenRouter/Gemini). The structured two-section format — **In this document** and **Why it matters here** — gives every explanation more analytical depth than a flat paragraph.
+
+For follow-ups, the entire conversation history is passed as a native multi-turn `messages` array to each provider. There is no artificial conversation depth limit.
 
 ---
 
@@ -284,22 +302,26 @@ Stream a context-aware AI explanation via Server-Sent Events.
   "provider": "claude",
   "apiKey": "sk-ant-...",
   "model": null,
-  "followUp": "Can you explain how this differs from neurogenesis?",
-  "previousExplanation": "Synaptic plasticity in this paper refers to..."
+  "sectionHeading": "Methods",
+  "messages": [
+    { "role": "user",      "content": "Please explain \"synaptic plasticity\" as used in this document." },
+    { "role": "assistant", "content": "In this document, synaptic plasticity refers to..." },
+    { "role": "user",      "content": "How does this differ from neurogenesis?" }
+  ]
 }
 ```
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `highlighted` | string | ✅ | The selected text |
-| `surrounding` | string | ✅ | ±300 chars of context around the selection |
+| `surrounding` | string | ✅ | Sentence-bounded context around the selection (up to 2000 chars) |
 | `documentTitle` | string | ✅ | PDF filename or metadata title |
 | `pageNumber` | number | ✅ | Current page number |
 | `provider` | string | ✅ | `claude` \| `gemini` \| `openai` \| `openrouter` |
 | `apiKey` | string | ❌ | User key for this request. If absent, server key is tried, then donated queue |
 | `model` | string | ❌ | Optional; OpenRouter has a default if omitted. Use to override (e.g. `mistralai/mistral-7b-instruct`) |
-| `followUp` | string | ❌ | Follow-up question; requires `previousExplanation` |
-| `previousExplanation` | string | ❌ | Prior AI response included for follow-up context |
+| `sectionHeading` | string | ❌ | Nearest section heading above the selection (auto-detected by client) |
+| `messages` | array | ❌ | Full conversation history for multi-turn follow-ups. Each entry: `{ role: 'user'\|'assistant', content: string }`. Omit for initial lookups. |
 
 **Response:** `text/event-stream`
 
@@ -656,20 +678,26 @@ ContextLens/
 ```js
 'use strict'
 
-const { buildPrompt } = require('./prompt')
+const { buildSystemPrompt, buildInitialUserMessage } = require('./prompt')
 
 async function getDefinition(payload, res) {
   const apiKey = payload.apiKey || process.env.<NAME>_API_KEY
   if (!apiKey) throw new Error('<NAME>_API_KEY is not configured.')
 
-  const prompt = buildPrompt(payload)
+  const systemPrompt = buildSystemPrompt(payload)
+  // Use the provided multi-turn history, or start a fresh conversation
+  const messages = payload.messages?.length > 0
+    ? payload.messages
+    : [{ role: 'user', content: buildInitialUserMessage(payload) }]
 
-  // Initialize your SDK; stream chunks back via:
+  // Initialize your SDK with systemPrompt + messages, then stream chunks back via:
   // res.write(`data: ${chunkText}\n\n`)
 }
 
 module.exports = { getDefinition }
 ```
+
+`payload` always contains: `highlighted`, `surrounding`, `documentTitle`, `pageNumber`, `sectionHeading` (optional), `messages` (array of `{role, content}` turns — empty on the first lookup), `model`, and `apiKey`.
 
 2. Register it in `server/providers/index.js`:
 

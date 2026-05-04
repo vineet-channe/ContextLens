@@ -28,7 +28,7 @@ function getEnvKeyForProvider(provider) {
 }
 
 function validateBody(body) {
-  const { highlighted, surrounding, documentTitle, pageNumber, provider, model, followUp, previousExplanation, apiKey } = body
+  const { highlighted, surrounding, documentTitle, pageNumber, provider, model, messages, sectionHeading, apiKey } = body
 
   if (typeof highlighted !== 'string' || highlighted.trim().length < 2) {
     return 'highlighted must be a string of at least 2 characters'
@@ -36,8 +36,8 @@ function validateBody(body) {
   if (highlighted.length > 500) {
     return 'highlighted must be 500 characters or fewer'
   }
-  if (typeof surrounding !== 'string' || surrounding.length > 1000) {
-    return 'surrounding must be a string of 1000 characters or fewer'
+  if (typeof surrounding !== 'string' || surrounding.length > 2000) {
+    return 'surrounding must be a string of 2000 characters or fewer'
   }
   if (typeof documentTitle !== 'string' || documentTitle.length > 300) {
     return 'documentTitle must be a string of 300 characters or fewer'
@@ -51,11 +51,19 @@ function validateBody(body) {
   if (model !== undefined && (typeof model !== 'string' || model.length > 200)) {
     return 'model must be a string of 200 characters or fewer'
   }
-  if (followUp !== undefined && (typeof followUp !== 'string' || followUp.length > 500)) {
-    return 'followUp must be a string of 500 characters or fewer'
+  if (sectionHeading !== undefined && (typeof sectionHeading !== 'string' || sectionHeading.length > 200)) {
+    return 'sectionHeading must be a string of 200 characters or fewer'
   }
-  if (previousExplanation !== undefined && (typeof previousExplanation !== 'string' || previousExplanation.length > 2000)) {
-    return 'previousExplanation must be a string of 2000 characters or fewer'
+  if (messages !== undefined) {
+    if (!Array.isArray(messages)) return 'messages must be an array'
+    if (messages.length > 40) return 'messages must have 40 entries or fewer'
+    for (const m of messages) {
+      if (!m || typeof m !== 'object') return 'each message must be an object'
+      if (m.role !== 'user' && m.role !== 'assistant') return 'message role must be "user" or "assistant"'
+      if (typeof m.content !== 'string' || m.content.length > 4000) {
+        return 'message content must be a string of 4000 characters or fewer'
+      }
+    }
   }
   if (apiKey != null && (typeof apiKey !== 'string' || apiKey.length > 1024)) {
     return 'apiKey must be a string of 1024 characters or fewer'
@@ -72,7 +80,7 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: validationError })
   }
 
-  const { highlighted, surrounding, documentTitle, pageNumber, provider = 'openrouter', model, followUp, previousExplanation, apiKey } = req.body
+  const { highlighted, surrounding, documentTitle, pageNumber, provider = 'openrouter', model, messages, sectionHeading, apiKey } = req.body
   const trimmedKey = typeof apiKey === 'string' ? apiKey.trim() : undefined
   const basePayload = {
     highlighted,
@@ -80,8 +88,8 @@ router.post('/', async (req, res) => {
     documentTitle,
     pageNumber,
     model,
-    followUp,
-    previousExplanation,
+    messages,
+    sectionHeading,
   }
 
   res.setHeader('Content-Type', 'text/event-stream')

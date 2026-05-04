@@ -61,8 +61,10 @@ export default function ReaderPage() {
     if (past.length > 0) setHistory(past)
   }, [])
 
-  const { state, popupAnchor, fetchDefinition, sendFollowUpForHistory, clearDefinition } =
+  const { state, popupAnchor, fetchDefinition, sendFollowUp, sendFollowUpForHistory, clearDefinition } =
     useContextDefinition()
+  // Prevents the status=success useEffect from treating popup follow-ups as new lookups
+  const isPopupFollowUpRef = useRef(false)
 
   const model = provider === 'openrouter' || provider === 'openai' ? openRouterModel : undefined
   const documentTitle = pdfFile?.name ?? 'Unknown document'
@@ -97,6 +99,12 @@ export default function ReaderPage() {
     if (state.status !== 'success' || !state.highlighted || !state.explanation) return
 
     const followUpKey = pendingFollowUpKeyRef.current
+    if (isPopupFollowUpRef.current) {
+      // Popup follow-up completed — conversation is tracked inside the popup, not the sidebar
+      isPopupFollowUpRef.current = false
+      return
+    }
+
     if (followUpKey) {
       // Completed follow-up for an existing history item
       const question = pendingFollowUpQuestionRef.current
@@ -161,7 +169,7 @@ export default function ReaderPage() {
   }, [state.status, state.highlighted, state.explanation])
 
   const handleTextSelect = useCallback(
-    ({ highlighted, surrounding, pageNumber, anchor }) => {
+    ({ highlighted, surrounding, pageNumber, sectionHeading, anchor }) => {
       setHistoryViewKey(null)
       pendingPageNumberRef.current = pageNumber
       pendingContextRef.current = { surrounding, documentTitle, provider, model }
@@ -173,10 +181,19 @@ export default function ReaderPage() {
         provider,
         model,
         apiKey: getKey(provider),
+        sectionHeading,
         anchor,
       })
     },
     [documentTitle, provider, model, fetchDefinition, getKey],
+  )
+
+  const handlePopupFollowUp = useCallback(
+    (question) => {
+      isPopupFollowUpRef.current = true
+      sendFollowUp(question)
+    },
+    [sendFollowUp],
   )
 
   const handleClosePopup = useCallback(() => {
@@ -323,6 +340,8 @@ export default function ReaderPage() {
             status={state.status}
             explanation={state.explanation}
             error={state.error}
+            conversationHistory={state.conversationHistory}
+            onFollowUp={handlePopupFollowUp}
             onClose={handleClosePopup}
           />
         )}
