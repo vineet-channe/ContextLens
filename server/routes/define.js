@@ -2,10 +2,30 @@
 
 const express = require('express')
 const { providers } = require('../providers')
+const {
+  takeNextKey,
+  markKeySuccess,
+  markKeyFailure,
+} = require('../services/donatedKeyPool')
 
 const router = express.Router()
 
 const VALID_PROVIDERS = new Set(Object.keys(providers))
+const PROVIDER_ENV_KEY = {
+  claude: 'ANTHROPIC_API_KEY',
+  gemini: 'GEMINI_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+}
+
+function getEnvKeyForProvider(provider) {
+  const envName = PROVIDER_ENV_KEY[provider]
+  if (!envName) return null
+  const value = process.env[envName]
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed || null
+}
 
 function validateBody(body) {
   const { highlighted, surrounding, documentTitle, pageNumber, provider, model, followUp, previousExplanation, apiKey } = body
@@ -54,18 +74,69 @@ router.post('/', async (req, res) => {
 
   const { highlighted, surrounding, documentTitle, pageNumber, provider = 'openrouter', model, followUp, previousExplanation, apiKey } = req.body
   const trimmedKey = typeof apiKey === 'string' ? apiKey.trim() : undefined
-  const payload = { highlighted, surrounding, documentTitle, pageNumber, model, followUp, previousExplanation, apiKey: trimmedKey || undefined }
+  const basePayload = {
+    highlighted,
+    surrounding,
+    documentTitle,
+    pageNumber,
+    model,
+    followUp,
+    previousExplanation,
+  }
 
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
   res.flushHeaders()
 
+  let streamedAnyData = false
+  const originalWrite = res.write.bind(res)
+  res.write = (chunk, ...args) => {
+    if (typeof chunk === 'string' && chunk.startsWith('data: ') && !chunk.includes('[DONE]') && !chunk.includes('[ERROR]')) {
+      streamedAnyData = true
+    }
+    return originalWrite(chunk, ...args)
+  }
+
   try {
-    await providers[provider](payload, res)
-    res.write('data: [DONE]\n\n')
-    res.end()
-  } catch (err) {
+    if (trimmedKey) {
+      await providers[provider]({ ...basePayload, apiKey: trimmedKey }, res)
+      res.write('data: [DONE]\n\n')
+      return res.end()
+    }
+
+    const envKey = getEnvKeyForProvider(provider)
+    if (envKey) {
+      try {
+        await providers[provider]({ ...basePayload, apiKey: envKey }, res)
+        res.write('data: [DONE]\n\n')
+        return res.end()
+      } catch (envErr) {
+        if (streamedAnyData) throw envErr
+        // Fall through to donated key pool.
+      }
+    }
+
+    const maxPoolAttempts = 3
+    let attempts = 0
+    while (attempts < maxPoolAttempts) {
+      attempts += 1
+      const donated = await takeNextKey(provider)
+      if (!donated) break
+
+      try {
+        await providers[provider]({ ...basePayload, apiKey: donated.apiKey }, res)
+        await markKeySuccess(donated.keyId)
+        res.write('data: [DONE]\n\n')
+        return res.end()
+      } catch (poolErr) {
+        await markKeyFailure(donated.keyId, poolErr)
+        if (streamedAnyData) throw poolErr
+      }
+    }
+
+    throw new Error('No available API keys for this provider right now.')
+  } catch (_err) {
     if (res.headersSent) {
       res.write('data: [ERROR] Failed to contact LLM API.\n\n')
       res.end()

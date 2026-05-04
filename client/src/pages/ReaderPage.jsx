@@ -6,6 +6,7 @@ import PDFViewer from '../components/reader/PDFViewer'
 import DefinitionPopup from '../components/reader/DefinitionPopup'
 import DefinitionPanel from '../components/reader/DefinitionPanel'
 import ApiKeyModal from '../components/reader/ApiKeyModal'
+import DonateKeyModal from '../components/reader/DonateKeyModal'
 import { useContextDefinition } from '../hooks/useContextDefinition'
 import { useAuth } from '../context/AuthContext'
 import { usePaperHistory } from '../hooks/usePaperHistory'
@@ -32,6 +33,7 @@ export default function ReaderPage() {
   const { pageState } = useTransition()
   const { getKey, setKey, hasKey } = useApiKeys()
   const [keyModalOpen, setKeyModalOpen] = useState(false)
+  const [donateModalOpen, setDonateModalOpen] = useState(false)
   const { initSession, loadSessionLookups, saveLookup, updateLookupFollowUps, fetchAllSessions } = usePaperHistory()
   // Stable refs so backend calls inside useEffects never stale-close over callbacks
   const backendRef = useRef({ isAuthenticated, initSession, loadSessionLookups, saveLookup, updateLookupFollowUps })
@@ -250,6 +252,7 @@ export default function ReaderPage() {
         onUploadNew={handleUploadNew}
         hasKeyForProvider={hasKey(provider)}
         onOpenKeyModal={() => setKeyModalOpen(true)}
+        onOpenDonateModal={() => setDonateModalOpen(true)}
       />
 
       {keyModalOpen && (
@@ -259,6 +262,10 @@ export default function ReaderPage() {
           onSave={setKey}
           onClose={() => setKeyModalOpen(false)}
         />
+      )}
+
+      {donateModalOpen && (
+        <DonateKeyModal onClose={() => setDonateModalOpen(false)} />
       )}
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>

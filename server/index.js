@@ -8,6 +8,7 @@ const passport = require('passport')
 const defineRoute = require('./routes/define')
 const authRoute = require('./routes/auth')
 const historyRoute = require('./routes/history')
+const keyPoolRoute = require('./routes/keyPool')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -57,6 +58,14 @@ const authLimiter = rateLimit({
   message: { error: 'Too many auth requests, please try again later.' },
 })
 
+const keyPoolLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many key pool requests, please try again later.' },
+})
+
 app.use(globalLimiter)
 
 app.get('/api/health', (_req, res) => {
@@ -65,6 +74,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authLimiter, authRoute)
 app.use('/api/history', historyRoute)
+app.use('/api/key-pool', keyPoolLimiter, keyPoolRoute)
 app.use('/api/define', defineLimiter, defineRoute)
 
 const MONGO_URI = process.env.MONGODB_URI

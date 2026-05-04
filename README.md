@@ -40,7 +40,7 @@ ContextLens knows the difference.
 | 🖊️ **Highlight → Explain** | Select any text; a draggable floating popup streams a context-aware AI explanation with a one-click copy button |
 | 🧠 **Document-Aware AI** | Explanations are grounded in the paper's subject matter, not generic definitions |
 | 💬 **Follow-up Questions** | Continue the conversation about any definition without losing context |
-| 🔀 **4 AI Providers** | Claude, Gemini, GPT-4o-mini, OpenRouter — switch anytime; use the server's key or supply your own per provider |
+| 🔀 **4 AI Providers** | Claude, Gemini, GPT-4o-mini, OpenRouter — switch anytime; use your key, server key, or donated fallback queue |
 | 📚 **Session History** | All lookups shown in a right-hand sidebar; click any entry to jump the PDF to that exact page |
 | 🔐 **Google OAuth Login** | Sign in to unlock persistent sessions saved across devices |
 | 🗂️ **Resume Past Papers** | Pick up where you left off on any previously uploaded document |
@@ -296,7 +296,7 @@ Stream a context-aware AI explanation via Server-Sent Events.
 | `documentTitle` | string | ✅ | PDF filename or metadata title |
 | `pageNumber` | number | ✅ | Current page number |
 | `provider` | string | ✅ | `claude` \| `gemini` \| `openai` \| `openrouter` |
-| `apiKey` | string | ❌ | User's own key; falls back to server env key if absent |
+| `apiKey` | string | ❌ | User key for this request. If absent, server key is tried, then donated queue |
 | `model` | string | ❌ | Optional; OpenRouter has a default if omitted. Use to override (e.g. `mistralai/mistral-7b-instruct`) |
 | `followUp` | string | ❌ | Follow-up question; requires `previousExplanation` |
 | `previousExplanation` | string | ❌ | Prior AI response included for follow-up context |
@@ -309,6 +309,18 @@ data:  plasticity refers to the brain's
 data:  ability to strengthen or weaken...
 data: [DONE]
 ```
+
+### Fallback Order for Keys
+
+For each `/api/define` request, keys are resolved in this order:
+
+```
+1. request.apiKey (if provided)
+2. process.env key for the selected provider
+3. donated key queue for that provider (up to 3 attempts)
+```
+
+If a donated key is rate-limited, it is temporarily cooled down. If it is invalid/expired, it is marked exhausted and removed from active rotation.
 
 ---
 
@@ -336,6 +348,27 @@ All routes require `Authorization: Bearer <token>`
 | GET | `/api/history/sessions/:id/lookups` | Get all lookups for a session |
 | POST | `/api/history/sessions/:id/lookups` | Save a new definition lookup |
 | PATCH | `/api/history/sessions/:id/lookups/:lookupId` | Append follow-up Q&A to a lookup |
+
+---
+
+### Donated Key Pool Routes
+
+All routes require `Authorization: Bearer <token>`
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/key-pool/my-donations` | List your donated keys (safe metadata only) |
+| POST | `/api/key-pool/donate` | Donate a key to the shared queue |
+| DELETE | `/api/key-pool/:donationId` | Revoke one of your donated keys |
+
+**Donate request body:**
+
+```json
+{
+        "provider": "claude",
+        "apiKey": "sk-ant-..."
+}
+```
 
 ---
 
@@ -454,6 +487,11 @@ GOOGLE_CLIENT_SECRET=
 # JWT — generate a secure secret:
 # node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 JWT_SECRET=
+
+# Donated key queue (required if you use /api/key-pool or queue fallback)
+# node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+KEY_POOL_ENCRYPTION_SECRET=
+KEY_POOL_FINGERPRINT_SECRET=
 ```
 
 Fill in `client/.env`:
@@ -532,6 +570,7 @@ After deploying, update your Google Cloud Console OAuth credentials to include t
 | Global (all routes) | 200 requests / 15 min per IP |
 | `POST /api/define` | 30 requests / 15 min per IP |
 | `GET /api/auth/*` | 20 requests / 15 min per IP |
+| `/api/key-pool/*` | 40 requests / 15 min per IP |
 
 Users who provide their own API key via the in-app modal are still subject to server-side rate limits, but their key is passed directly to the provider — server-side quota is not consumed.
 
@@ -588,7 +627,8 @@ ContextLens/
     ├── models/
     │   ├── User.js
     │   ├── PaperSession.js
-    │   └── DefinitionLookup.js
+    │   ├── DefinitionLookup.js
+    │   └── DonatedApiKey.js
     ├── providers/
     │   ├── index.js                       ← Provider registry
     │   ├── prompt.js                      ← Shared prompt template
@@ -599,7 +639,12 @@ ContextLens/
     ├── routes/
     │   ├── auth.js                        ← Google OAuth, /me
     │   ├── define.js                      ← SSE streaming endpoint
-    │   └── history.js                     ← Sessions + lookups CRUD
+    │   ├── history.js                     ← Sessions + lookups CRUD
+    │   └── keyPool.js                     ← Donate/list/revoke queue keys
+    ├── services/
+    │   └── donatedKeyPool.js              ← Queue selection and key lifecycle
+    └── utils/
+        └── keyCrypto.js                   ← AES encryption + key fingerprinting
 ```
 
 ---
@@ -639,12 +684,12 @@ The `/api/define` route and rate limiting already handle any registered provider
 
 ---
 
-## Bring Your Own Key (BYOK)
+## Bring Your Own Key (BYOK) + Donated Queue
 
-Every AI provider supports two key sources — the server's env key and a user-supplied key. The lookup order is:
+Every AI provider supports three key sources — user key, server key, and donated queue. The lookup order is:
 
 ```
-request.apiKey  →  process.env.<PROVIDER>_API_KEY  →  throw (unconfigured)
+request.apiKey  →  process.env.<PROVIDER>_API_KEY  →  donated queue  →  throw
 ```
 
 **How it works in the UI:**
@@ -655,8 +700,8 @@ request.apiKey  →  process.env.<PROVIDER>_API_KEY  →  throw (unconfigured)
 4. Every `/api/define` call includes the key in the request body; the server uses it for that request only and never persists it
 5. Clear the key at any time from the same modal; the server env key takes over again
 
-**When no server env key is set and no user key is provided, the request throws and the user sees an error.**
-For a self-hosted deployment without any env keys configured, users must always supply their own key.
+**When user and server keys are unavailable or fail, ContextLens attempts donated queue keys (up to 3 tries/request).**
+If no queue key is available, the request throws and the user sees an error.
 
 ---
 
@@ -664,9 +709,73 @@ For a self-hosted deployment without any env keys configured, users must always 
 
 - API keys provided by users are never stored server-side — they are used once per request and discarded
 - User-supplied keys stored client-side live only in `localStorage` on the user's own machine
+- Donated queue keys are encrypted at rest (AES-256-GCM) and never returned to clients
+- Donated keys are deduplicated using a secret fingerprint hash
 - JWT tokens expire after 30 days; re-login is required after expiry
 - All routes are protected by Helmet security headers and CORS restricted to `CLIENT_ORIGIN`
 - MongoDB credentials should use a dedicated Atlas user with read/write access to the `contextlens` database only
+
+---
+
+## How to Verify the Donated Queue
+
+### 1. Configure server env
+
+Required for queue behavior:
+
+- `MONGODB_URI`
+- `JWT_SECRET`
+- `KEY_POOL_ENCRYPTION_SECRET`
+- `KEY_POOL_FINGERPRINT_SECRET`
+
+You can leave provider env keys empty to force queue usage.
+
+### 2. Get a JWT token
+
+Sign in with Google in the app and copy `cl_token` from browser localStorage.
+
+### 3. Donate a key
+
+```bash
+curl -X POST http://localhost:3001/api/key-pool/donate \
+        -H "Authorization: Bearer <JWT_TOKEN>" \
+        -H "Content-Type: application/json" \
+        -d '{"provider":"claude","apiKey":"sk-ant-..."}'
+```
+
+### 4. Confirm donation exists
+
+```bash
+curl http://localhost:3001/api/key-pool/my-donations \
+        -H "Authorization: Bearer <JWT_TOKEN>"
+```
+
+### 5. Trigger queue fallback
+
+Call `/api/define` without an `apiKey` in body:
+
+```bash
+curl -N -X POST http://localhost:3001/api/define \
+        -H "Content-Type: application/json" \
+        -d '{
+                "highlighted":"synaptic plasticity",
+                "surrounding":"...recent advances have shown that synaptic plasticity plays a central role...",
+                "documentTitle":"paper.pdf",
+                "pageNumber":3,
+                "provider":"claude"
+        }'
+```
+
+If you see streamed `data:` chunks and `[DONE]`, the queue fallback path is working.
+
+### 6. Revoke the donated key
+
+Use donation id from `/api/key-pool/my-donations`:
+
+```bash
+curl -X DELETE http://localhost:3001/api/key-pool/<DONATION_ID> \
+        -H "Authorization: Bearer <JWT_TOKEN>"
+```
 
 ---
 

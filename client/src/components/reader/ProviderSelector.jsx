@@ -13,7 +13,6 @@ export default function ProviderSelector({
   openRouterModel,
   setOpenRouterModel,
   hasKeyForProvider,
-  onOpenKeyModal,
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -178,60 +177,35 @@ export default function ProviderSelector({
         )}
       </div>
 
-      {/* Key icon button */}
-      <button
-        onClick={onOpenKeyModal}
-        aria-label={hasKeyForProvider ? 'Edit your API key' : 'Add your API key'}
-        title={hasKeyForProvider ? 'Using your API key — click to edit' : 'Add your own API key'}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '28px',
-          height: '28px',
-          background: hasKeyForProvider ? 'rgba(212,168,71,0.12)' : 'var(--bg-elevated)',
-          border: `1px solid ${hasKeyForProvider ? 'var(--accent-gold-muted)' : 'var(--border-default)'}`,
-          borderRadius: 'var(--radius-md)',
-          cursor: 'pointer',
-          color: hasKeyForProvider ? 'var(--accent-gold)' : 'var(--text-tertiary)',
-          transition: 'border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast)',
-          flexShrink: 0,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = 'var(--accent-gold-muted)'
-          e.currentTarget.style.color = 'var(--accent-gold)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = hasKeyForProvider ? 'var(--accent-gold-muted)' : 'var(--border-default)'
-          e.currentTarget.style.color = hasKeyForProvider ? 'var(--accent-gold)' : 'var(--text-tertiary)'
-        }}
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="8" cy="15" r="4" />
-          <path d="M12 11l8-8" />
-          <path d="M20 3l1 1" />
-          <path d="M17 6l1 1" />
-        </svg>
-      </button>
-
       {/* Model input for providers that accept a custom model slug */}
       {(provider === 'openrouter' || provider === 'openai') && (
         <input
           type="text"
-          value={openRouterModel}
-          onChange={(e) => setOpenRouterModel(e.target.value)}
+          value={
+            provider === 'openrouter' && !hasKeyForProvider
+              ? 'free'
+              : openRouterModel
+          }
+          onChange={(e) => {
+            if (provider === 'openrouter' && !hasKeyForProvider) return
+            setOpenRouterModel(e.target.value)
+          }}
+          disabled={provider === 'openrouter' && !hasKeyForProvider}
           placeholder={provider === 'openai' ? 'e.g. gpt-4o' : 'model slug'}
           aria-label={provider === 'openai' ? 'OpenAI model' : 'OpenRouter model'}
+          title={provider === 'openrouter' && !hasKeyForProvider ? 'Add your own OpenRouter key to use paid models' : ''}
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: '11px',
-            color: 'var(--text-primary)',
+            color: provider === 'openrouter' && !hasKeyForProvider ? 'var(--text-tertiary)' : 'var(--text-primary)',
             background: 'var(--bg-elevated)',
             border: '1px solid var(--border-default)',
             borderRadius: 'var(--radius-md)',
             padding: '5px 10px',
             outline: 'none',
             width: '170px',
+            cursor: provider === 'openrouter' && !hasKeyForProvider ? 'not-allowed' : 'text',
+            opacity: provider === 'openrouter' && !hasKeyForProvider ? 0.6 : 1,
             transition: 'border-color var(--transition-fast)',
           }}
           onFocus={(e) =>

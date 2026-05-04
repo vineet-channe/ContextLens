@@ -11,6 +11,7 @@ export default function ReaderTopBar({
   onUploadNew,
   hasKeyForProvider,
   onOpenKeyModal,
+  onOpenDonateModal,
 }) {
   const { navigateTo } = useTransition()
   const { user, isAuthenticated, login } = useAuth()
@@ -99,9 +100,9 @@ export default function ReaderTopBar({
           openRouterModel={openRouterModel}
           setOpenRouterModel={setOpenRouterModel}
           hasKeyForProvider={hasKeyForProvider}
-          onOpenKeyModal={onOpenKeyModal}
         />
 
+        {/* Upload new button */}
         <button
           onClick={onUploadNew}
           style={{
@@ -121,6 +122,82 @@ export default function ReaderTopBar({
         >
           Upload new
         </button>
+
+        {/* BYOK key button */}
+        <button
+          onClick={onOpenKeyModal}
+          aria-label={hasKeyForProvider ? 'Edit your API key' : 'Add your API key'}
+          title={hasKeyForProvider ? 'Using your API key — click to edit' : 'Add your own API key'}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '28px',
+            height: '28px',
+            background: hasKeyForProvider ? 'rgba(212,168,71,0.12)' : 'var(--bg-elevated)',
+            border: `1px solid ${hasKeyForProvider ? 'var(--accent-gold-muted)' : 'var(--border-default)'}`,
+            borderRadius: 'var(--radius-md)',
+            cursor: 'pointer',
+            color: hasKeyForProvider ? 'var(--accent-gold)' : 'var(--text-tertiary)',
+            transition: 'border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast)',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--accent-gold-muted)'
+            e.currentTarget.style.color = 'var(--accent-gold)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = hasKeyForProvider ? 'var(--accent-gold-muted)' : 'var(--border-default)'
+            e.currentTarget.style.color = hasKeyForProvider ? 'var(--accent-gold)' : 'var(--text-tertiary)'
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="8" cy="15" r="4" />
+            <path d="M12 11l8-8" />
+            <path d="M20 3l1 1" />
+            <path d="M17 6l1 1" />
+          </svg>
+        </button>
+
+        {/* Donate key button — visible only when signed in */}
+        {isAuthenticated && (
+          <button
+            onClick={onOpenDonateModal}
+            aria-label="Donate an API key"
+            title="Donate an API key to the shared pool"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '28px',
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              color: 'var(--text-tertiary)',
+              flexShrink: 0,
+              transition: 'color var(--transition-fast), border-color var(--transition-fast)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent-gold-muted)'
+              e.currentTarget.style.color = 'var(--accent-gold)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-default)'
+              e.currentTarget.style.color = 'var(--text-tertiary)'
+            }}
+          >
+            {/* Gift / donate icon */}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 12 20 22 4 22 4 12" />
+              <rect x="2" y="7" width="20" height="5" />
+              <line x1="12" y1="22" x2="12" y2="7" />
+              <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+              <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+            </svg>
+          </button>
+        )}
 
         {/* User avatar / sign-in */}
         {isAuthenticated ? (
